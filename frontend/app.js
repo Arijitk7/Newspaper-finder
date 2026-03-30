@@ -1,42 +1,55 @@
-// ─── STATE ───────────────────────────────────────────
-// Empty string = use same origin (works both locally and when deployed)
-const BASE_URL = '';
+// ─── STATE ─────────────────────────────────────────────────────────────────
+const BASE_URL = ''; // same-origin — works locally AND on Render
 let selectedPaper = localStorage.getItem('selectedPaper') || 'ei-samay';
 let currentPdfUrl = '';
 let currentPaperName = '';
 let currentDate = '';
 
-// ─── INIT ─────────────────────────────────────────────
+// ─── INIT ───────────────────────────────────────────────────────────────────
 (function init() {
+    // Set today's date as default
     const today = new Date();
     const yyyy = today.getFullYear();
     const mm = String(today.getMonth() + 1).padStart(2, '0');
     const dd = String(today.getDate()).padStart(2, '0');
-    document.getElementById('dateInput').value = `${yyyy}-${mm}-${dd}`;
-    document.getElementById('dateInput').max = `${yyyy}-${mm}-${dd}`;
+    const dateInput = document.getElementById('dateInput');
+    dateInput.value = `${yyyy}-${mm}-${dd}`;
+    dateInput.max = `${yyyy}-${mm}-${dd}`;
+
+    // Restore saved paper
     selectPaper(selectedPaper, false);
+
+    // Scroll animations
+    initScrollAnimations();
+    initMagneticButtons();
 })();
 
-// ─── PAPER SELECTION ─────────────────────────────────
+// ─── PAPER SELECTION ────────────────────────────────────────────────────────
 function selectPaper(paperId, save = true) {
     selectedPaper = paperId;
     if (save) localStorage.setItem('selectedPaper', paperId);
     document.querySelectorAll('.paper-card').forEach(c => c.classList.remove('active'));
     const card = document.getElementById(`card-${paperId}`);
-    if (card) card.classList.add('active');
-    hideResult();
+    if (card) {
+        card.classList.add('active');
+        // Ripple effect
+        spawnRipple(card);
+    }
+    hideResultAndError();
 }
 
-// ─── FETCH ─────────────────────────────────────────────
+// ─── FETCH ──────────────────────────────────────────────────────────────────
 async function doFetch() {
     const rawDate = document.getElementById('dateInput').value;
-    if (!rawDate) { showError('Please select a date first.'); return; }
+    if (!rawDate) { showError('Please select a date to continue.'); return; }
 
+    // Format: YYYY-MM-DD → DD-MM-YYYY for our backend
     const [yyyy, mm, dd] = rawDate.split('-');
     const formattedDate = `${dd}-${mm}-${yyyy}`;
 
-    const sourceNames = { 'ei-samay': 'Fresherwave & Careerswave', 'economic-times': 'ET Archives' };
-    document.getElementById('scanSource').textContent = sourceNames[selectedPaper] || 'news archives';
+    // Update loader label
+    const loaderText = document.getElementById('loaderText');
+    if (loaderText) loaderText.textContent = `Scanning archives for ${formattedDate}...`;
 
     setUIState('loading');
 
@@ -49,7 +62,7 @@ async function doFetch() {
             currentPaperName = data.paper;
             currentDate = data.date;
 
-            // Convert /view to /preview for best inline reading
+            // Build clean Google Drive preview URL
             const previewUrl = currentPdfUrl.includes('drive.google.com') && currentPdfUrl.includes('/view')
                 ? currentPdfUrl.replace('/view', '/preview')
                 : currentPdfUrl;
@@ -60,52 +73,63 @@ async function doFetch() {
             triggerConfetti();
             setUIState('result');
         } else {
-            showError(data.error || `Could not find the paper for this date. The edition may not be available yet.`);
+            showError(data.error || `No PDF found for this date. It may not be uploaded yet — try a recent date.`);
         }
     } catch (err) {
-        showError(`Network error: ${err.message}`);
+        showError(`Connection failed. Is the server awake? Try refreshing and waiting 30 seconds if it just woke up.<br><small style="opacity:0.6;">${err.message}</small>`);
     }
 }
 
-// ─── SHARE ──────────────────────────────────────────
+// ─── SHARE ──────────────────────────────────────────────────────────────────
 async function doShare() {
+    if (!currentPdfUrl) return;
     if (navigator.share) {
         try {
             await navigator.share({
                 title: `${currentPaperName} — ${currentDate}`,
-                text: `Read today's ${currentPaperName} e-paper 📰`,
+                text: `📰 Read today's ${currentPaperName}`,
                 url: currentPdfUrl
             });
-        } catch (e) { /* cancelled */ }
+        } catch (e) { /* user cancelled */ }
     } else {
         await navigator.clipboard.writeText(currentPdfUrl);
-        alert('Link copied to clipboard!');
+        // Flash the share button
+        const btn = document.querySelector('.btn-share');
+        if (btn) {
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> <span>Link Copied!</span>';
+            btn.style.color = '#10b981';
+            setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 2000);
+        }
     }
 }
 
-// ─── UI STATE MACHINE ─────────────────────────────────
+// ─── UI STATE MACHINE ───────────────────────────────────────────────────────
 function setUIState(state) {
     document.getElementById('loaderBox').style.display = 'none';
     document.getElementById('resultCard').style.display = 'none';
     document.getElementById('errorBox').classList.remove('visible');
     document.getElementById('fetchBtn').disabled = false;
 
+    const btnText = document.getElementById('btnText');
+
     if (state === 'loading') {
         document.getElementById('loaderBox').style.display = 'block';
         document.getElementById('fetchBtn').disabled = true;
-        document.getElementById('fetchBtnText').textContent = 'Searching Archives...';
+        if (btnText) btnText.textContent = 'Searching...';
     } else if (state === 'result') {
         document.getElementById('resultCard').style.display = 'block';
-        document.getElementById('fetchBtnText').textContent = 'Fetch Another Edition';
+        if (btnText) btnText.textContent = 'Fetch Another Edition';
     } else {
-        document.getElementById('fetchBtnText').textContent = 'Fetch E-Paper';
+        if (btnText) btnText.textContent = "Fetch Today's E-Paper";
     }
 }
 
-function hideResult() {
+function hideResultAndError() {
     document.getElementById('resultCard').style.display = 'none';
     document.getElementById('errorBox').classList.remove('visible');
-    document.getElementById('fetchBtnText').textContent = 'Fetch E-Paper';
+    const btnText = document.getElementById('btnText');
+    if (btnText) btnText.textContent = "Fetch Today's E-Paper";
     document.getElementById('fetchBtn').disabled = false;
 }
 
@@ -113,20 +137,124 @@ function showError(message) {
     setUIState('idle');
     document.getElementById('errorText').innerHTML = message;
     document.getElementById('errorBox').classList.add('visible');
+
+    // Shake animation on error
+    const box = document.getElementById('errorBox');
+    box.style.animation = 'none';
+    box.offsetHeight; // reflow
+    box.style.animation = 'shake 0.4s cubic-bezier(.36,.07,.19,.97)';
 }
 
-// ─── CONFETTI ─────────────────────────────────────────
+// ─── CONFETTI ───────────────────────────────────────────────────────────────
 function triggerConfetti() {
     if (typeof confetti === 'undefined') return;
-    const end = Date.now() + 2500;
-    const interval = setInterval(() => {
-        if (Date.now() > end) return clearInterval(interval);
-        confetti({ particleCount: 40, spread: 360, startVelocity: 25, ticks: 50, zIndex: 9999,
-            origin: { x: Math.random(), y: Math.random() * 0.4 } });
-    }, 300);
+    const colors = ['#6366f1', '#a78bfa', '#22d3ee', '#f0abfc', '#818cf8'];
+    const end = Date.now() + 2800;
+    (function fire() {
+        if (Date.now() > end) return;
+        confetti({
+            particleCount: 3,
+            angle: 60, spread: 55,
+            origin: { x: 0, y: 0.7 },
+            colors, zIndex: 9999
+        });
+        confetti({
+            particleCount: 3,
+            angle: 120, spread: 55,
+            origin: { x: 1, y: 0.7 },
+            colors, zIndex: 9999
+        });
+        requestAnimationFrame(fire);
+    })();
 }
 
-// ─── PWA ─────────────────────────────────────────────
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+// ─── RIPPLE EFFECT ──────────────────────────────────────────────────────────
+function spawnRipple(el) {
+    const r = document.createElement('span');
+    r.style.cssText = `
+        position: absolute; border-radius: 50%;
+        width: 200px; height: 200px;
+        left: 50%; top: 50%;
+        transform: translate(-50%, -50%) scale(0);
+        background: rgba(99,102,241,0.25);
+        animation: rippleAnim 0.5s ease-out forwards;
+        pointer-events: none;
+    `;
+    el.appendChild(r);
+    setTimeout(() => r.remove(), 600);
 }
+
+// ─── SCROLL ANIMATIONS ──────────────────────────────────────────────────────
+function initScrollAnimations() {
+    // Add initial hidden state to all animatable elements
+    const targets = document.querySelectorAll(
+        '.hero, .paper-grid, .controls, .fetch-btn, .hero-eyebrow, .hero h1, .hero p, .paper-card, .footer'
+    );
+
+    targets.forEach((el, i) => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(32px)';
+        el.style.transition = `opacity 0.7s ease ${i * 0.06}s, transform 0.7s cubic-bezier(0.16, 1, 0.3, 1) ${i * 0.06}s`;
+    });
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+                observer.unobserve(entry.target);
+            }
+        });
+    }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+
+    targets.forEach(el => observer.observe(el));
+}
+
+// ─── MAGNETIC BUTTON EFFECT ─────────────────────────────────────────────────
+function initMagneticButtons() {
+    const btn = document.getElementById('fetchBtn');
+    if (!btn) return;
+
+    btn.addEventListener('mousemove', (e) => {
+        if (btn.disabled) return;
+        const rect = btn.getBoundingClientRect();
+        const x = e.clientX - rect.left - rect.width / 2;
+        const y = e.clientY - rect.top - rect.height / 2;
+        btn.style.transform = `translateY(-3px) translate(${x * 0.06}px, ${y * 0.12}px)`;
+    });
+
+    btn.addEventListener('mouseleave', () => {
+        btn.style.transform = '';
+    });
+}
+
+// ─── PARALLAX ───────────────────────────────────────────────────────────────
+document.addEventListener('mousemove', (e) => {
+    const x = (e.clientX / window.innerWidth - 0.5) * 2;
+    const y = (e.clientY / window.innerHeight - 0.5) * 2;
+
+    document.querySelectorAll('.orb-1').forEach(o => {
+        o.style.transform = `translate(${x * 18}px, ${y * 12}px)`;
+    });
+    document.querySelectorAll('.orb-2').forEach(o => {
+        o.style.transform = `translate(${x * -14}px, ${y * -10}px)`;
+    });
+    document.querySelectorAll('.orb-3').forEach(o => {
+        o.style.transform = `translateX(-50%) translate(${x * 10}px, ${y * 8}px)`;
+    });
+});
+
+// ─── Add global CSS for animations not in HTML ─────────────────────────────
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes rippleAnim {
+        to { transform: translate(-50%, -50%) scale(3); opacity: 0; }
+    }
+    @keyframes shake {
+        10%, 90% { transform: translateX(-2px); }
+        20%, 80% { transform: translateX(4px); }
+        30%, 50%, 70% { transform: translateX(-6px); }
+        40%, 60% { transform: translateX(6px); }
+    }
+`;
+document.head.appendChild(style);
