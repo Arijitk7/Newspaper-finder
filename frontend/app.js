@@ -7,14 +7,32 @@ let currentDate = '';
 
 // ─── INIT ───────────────────────────────────────────────────────────────────
 (function init() {
-    // Set today's date as default
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
+    // Smart date: before 7 AM IST (UTC+5:30), default to YESTERDAY because today's paper isn't out yet
+    const now = new Date();
+    // IST offset = +5:30 = 330 minutes
+    const istOffset = 330 * 60 * 1000;
+    const istNow = new Date(now.getTime() + istOffset);
+    const istHour = istNow.getUTCHours();
+
+    // Use today if IST hour >= 7, otherwise use yesterday
+    const displayDate = new Date(istNow);
+    if (istHour < 7) {
+        displayDate.setUTCDate(displayDate.getUTCDate() - 1);
+    }
+
+    const yyyy = displayDate.getUTCFullYear();
+    const mm = String(displayDate.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(displayDate.getUTCDate()).padStart(2, '0');
+
+    // Max selectable date = today always
+    const todayIST = new Date(istNow);
+    const todayYYYY = todayIST.getUTCFullYear();
+    const todayMM = String(todayIST.getUTCMonth() + 1).padStart(2, '0');
+    const todayDD = String(todayIST.getUTCDate()).padStart(2, '0');
+
     const dateInput = document.getElementById('dateInput');
     dateInput.value = `${yyyy}-${mm}-${dd}`;
-    dateInput.max = `${yyyy}-${mm}-${dd}`;
+    dateInput.max = `${todayYYYY}-${todayMM}-${todayDD}`;
 
     // Restore saved paper
     selectPaper(selectedPaper, false);
@@ -70,7 +88,8 @@ async function doFetch() {
             document.getElementById('readerBtn').href = previewUrl;
             document.getElementById('resultLabel').textContent = `${currentPaperName} — ${currentDate}`;
 
-            triggerConfetti();
+            // Subtle success pulse instead of confetti
+            pulseSuccess();
             setUIState('result');
         } else {
             showError(data.error || `No PDF found for this date. It may not be uploaded yet — try a recent date.`);
@@ -145,27 +164,19 @@ function showError(message) {
     box.style.animation = 'shake 0.4s cubic-bezier(.36,.07,.19,.97)';
 }
 
-// ─── CONFETTI ───────────────────────────────────────────────────────────────
-function triggerConfetti() {
-    if (typeof confetti === 'undefined') return;
-    const colors = ['#6366f1', '#a78bfa', '#22d3ee', '#f0abfc', '#818cf8'];
-    const end = Date.now() + 2800;
-    (function fire() {
-        if (Date.now() > end) return;
-        confetti({
-            particleCount: 3,
-            angle: 60, spread: 55,
-            origin: { x: 0, y: 0.7 },
-            colors, zIndex: 9999
-        });
-        confetti({
-            particleCount: 3,
-            angle: 120, spread: 55,
-            origin: { x: 1, y: 0.7 },
-            colors, zIndex: 9999
-        });
-        requestAnimationFrame(fire);
-    })();
+// ─── SUCCESS PULSE (replaces confetti) ────────────────────────────────────
+function pulseSuccess() {
+    const btn = document.getElementById('fetchBtn');
+    if (!btn) return;
+    btn.style.boxShadow = '0 0 0 0 rgba(34, 197, 94, 0.6)';
+    btn.style.transition = 'box-shadow 0.1s';
+    let step = 0;
+    const sizes = ['0 0 0 8px rgba(34,197,94,0.3)', '0 0 0 16px rgba(34,197,94,0.15)', '0 0 0 24px rgba(34,197,94,0)', ''];
+    const t = setInterval(() => {
+        btn.style.boxShadow = sizes[step] || '';
+        step++;
+        if (step >= sizes.length) clearInterval(t);
+    }, 150);
 }
 
 // ─── RIPPLE EFFECT ──────────────────────────────────────────────────────────
