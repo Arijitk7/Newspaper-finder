@@ -1,22 +1,16 @@
-# Use the official Node.js image from Docker Hub (LTS version is recommended)
 FROM node:18-alpine
 
-# Set the working directory inside the container
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# Copy package.json and package-lock.json if available
+# Copy backend package files and install dependencies
 COPY backend/package*.json ./backend/
+RUN cd backend && npm install --production
 
-# Install the Express Backend dependencies
-WORKDIR /usr/src/app/backend
-RUN npm install
-
-# Move to the root level again and copy everything
-WORKDIR /usr/src/app
+# Copy all project files
 COPY . .
 
-# Expose the port the Express App binds to
+# Expose the port Render uses
 EXPOSE 3000
 
-# Run the server script when the container launches
+# Start the server
 CMD ["node", "backend/server.js"]
