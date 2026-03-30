@@ -61,16 +61,38 @@ function getTodayDate() {
     return `${dd}-${mm}-${yyyy}`;
 }
 
+// Generate multiple date format variants to match any site's format
+function getDateVariants(dateStr) {
+    // dateStr is DD-MM-YYYY
+    const [dd, mm, yyyy] = dateStr.split('-');
+    const date = new Date(parseInt(yyyy), parseInt(mm)-1, parseInt(dd));
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const shortMonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const mIdx = parseInt(mm) - 1;
+    return [
+        dateStr,                              // 31-03-2026
+        `${dd}/${mm}/${yyyy}`,                // 31/03/2026
+        `${dd}-${mm}-${yyyy}`,               // 31-03-2026
+        `${yyyy}-${mm}-${dd}`,               // 2026-03-31
+        `${dd} ${monthNames[mIdx]} ${yyyy}`,  // 31 March 2026
+        `${dd} ${shortMonths[mIdx]} ${yyyy}`, // 31 Mar 2026
+        `${monthNames[mIdx]} ${dd}, ${yyyy}`, // March 31, 2026
+        `${dd}.${mm}.${yyyy}`,               // 31.03.2026
+    ];
+}
+
 // ─── Scraping Logic ──────────────────────────────────
 function extractPdfLinkForDate(html, targetDate) {
     const $ = cheerio.load(html);
     let found = null;
+    const variants = getDateVariants(targetDate);
 
-    // Method 1: Find date in table rows
+    // Method 1: Find any date variant in table rows
     $('tr').each((i, row) => {
         if (found) return;
         const text = $(row).text();
-        if (text.includes(targetDate)) {
+        const hasDate = variants.some(v => text.includes(v));
+        if (hasDate) {
             const match = text.match(/https:\/\/drive\.google\.com\/file\/d\/[a-zA-Z0-9_-]+\/(?:view|edit|preview)[^"'\s]*/i);
             if (match) { found = match[0]; return; }
             const href = $(row).find('a[href*="drive.google.com"]').attr('href');
@@ -78,8 +100,26 @@ function extractPdfLinkForDate(html, targetDate) {
         }
     });
 
-    // Method 2: If looking for today, grab first Drive link anywhere on page
-    if (!found && targetDate === getTodayDate()) {
+    // Method 2: Find any date variant in any paragraph/div/td text, then find nearest link
+    if (!found) {
+        $('p, div, td, li, span').each((i, el) => {
+            if (found) return;
+            const text = $(el).text();
+            const hasDate = variants.some(v => text.includes(v));
+            if (hasDate) {
+                // Look for drive link in text
+                const match = text.match(/https:\/\/drive\.google\.com\/file\/d\/[a-zA-Z0-9_-]+\/(?:view|edit|preview)[^"'\s]*/i);
+                if (match) { found = match[0]; return; }
+                // Look for nearby anchor
+                const href = $(el).find('a[href*="drive.google"]').attr('href')
+                    || $(el).closest('tr').find('a[href*="drive.google"]').attr('href');
+                if (href) found = href;
+            }
+        });
+    }
+
+    // Method 3: For today's date or if no date found, grab first Drive link on the page
+    if (!found && (targetDate === getTodayDate() || !found)) {
         const match = html.match(/https:\/\/drive\.google\.com\/file\/d\/[a-zA-Z0-9_-]+\/(?:view|edit|preview)[^"'\s]*/i);
         if (match) return match[0];
         $('a[href*="drive.google.com/file/d/"]').each((i, el) => {
@@ -89,6 +129,7 @@ function extractPdfLinkForDate(html, targetDate) {
 
     return found;
 }
+
 
 async function tryScrapeUrl(url, targetDate) {
     const response = await axios.get(url, {
