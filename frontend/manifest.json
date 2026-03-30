@@ -1,0 +1,21 @@
+{
+  "name": "E-Paper Reading Hub",
+  "short_name": "E-Papers",
+  "description": "Read top global newspapers instantly. Featuring a native PDF reader.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "https://img.icons8.com/?size=192&id=102558&format=png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://img.icons8.com/?size=512&id=102558&format=png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}

@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Paper Hub — Daily Newspapers at Your Fingertips</title>
+    <meta name="description" content="Read Ei Samay and Economic Times daily newspapers with AI-powered page-by-page summaries.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#0a0f1e">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-light: #818cf8;
+            --purple: #a855f7;
+            --green: #10b981;
+            --red: #ef4444;
+            --bg: #0a0f1e;
+            --card: rgba(15, 23, 42, 0.8);
+            --card-border: rgba(99, 102, 241, 0.2);
+            --glass: rgba(255,255,255,0.04);
+            --text: #f1f5f9;
+            --muted: #64748b;
+            --muted-light: #94a3b8;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ─── ANIMATED BACKGROUND ─── */
+        .bg-grid {
+            position: fixed; inset: 0; z-index: 0;
+            background-image: linear-gradient(rgba(99,102,241,0.04) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(99,102,241,0.04) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+        }
+
+        .bg-glow {
+            position: fixed; z-index: 0; pointer-events: none;
+            border-radius: 50%;
+            filter: blur(120px);
+            animation: driftGlow 12s ease-in-out infinite alternate;
+        }
+
+        .glow-1 { width: 600px; height: 600px; background: rgba(99,102,241,0.15); top: -100px; left: -100px; }
+        .glow-2 { width: 500px; height: 500px; background: rgba(168,85,247,0.1); bottom: -50px; right: -100px; animation-delay: -4s; }
+        .glow-3 { width: 300px; height: 300px; background: rgba(16,185,129,0.08); top: 40%; left: 50%; animation-delay: -8s; }
+
+        @keyframes driftGlow {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(30px, 20px) scale(1.05); }
+        }
+
+        /* ─── MAIN LAYOUT ─── */
+        .app-wrapper {
+            position: relative; z-index: 1;
+            min-height: 100vh;
+            display: flex; flex-direction: column;
+            align-items: center;
+            padding: 40px 20px 80px;
+        }
+
+        /* ─── HERO HEADER ─── */
+        .hero {
+            text-align: center;
+            margin-bottom: 50px;
+            animation: fadeUp 0.8s ease forwards;
+        }
+
+        .logo-chip {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3);
+            padding: 6px 14px; border-radius: 999px; font-size: 12px;
+            color: var(--primary-light); font-weight: 600; letter-spacing: 0.08em;
+            text-transform: uppercase; margin-bottom: 20px;
+        }
+
+        .hero h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(36px, 6vw, 60px);
+            font-weight: 700; line-height: 1.1;
+            background: linear-gradient(135deg, #f1f5f9 0%, #a5b4fc 50%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 14px;
+        }
+
+        .hero p {
+            color: var(--muted-light); font-size: 17px; font-weight: 400; max-width: 480px; margin: 0 auto;
+        }
+
+        /* ─── PAPER SELECTOR CARDS ─── */
+        .paper-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px;
+            width: 100%; max-width: 580px; margin-bottom: 28px;
+        }
+
+        .paper-card {
+            background: var(--glass); border: 2px solid rgba(255,255,255,0.07);
+            border-radius: 16px; padding: 18px 20px;
+            cursor: pointer; transition: all 0.25s ease;
+            display: flex; flex-direction: column; gap: 6px;
+            position: relative; overflow: hidden;
+        }
+
+        .paper-card::before {
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(135deg, rgba(99,102,241,0.1) 0%, transparent 60%);
+            opacity: 0; transition: opacity 0.25s ease;
+        }
+
+        .paper-card:hover::before, .paper-card.active::before { opacity: 1; }
+
+        .paper-card.active {
+            border-color: rgba(99,102,241,0.5);
+            box-shadow: 0 0 0 1px rgba(99,102,241,0.3), 0 8px 32px rgba(99,102,241,0.15);
+        }
+
+        .paper-card .emoji { font-size: 28px; }
+        .paper-card .name { font-weight: 700; font-size: 15px; color: var(--text); }
+        .paper-card .lang {
+            font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+            color: var(--muted);
+        }
+
+        .paper-card .check {
+            position: absolute; top: 12px; right: 12px;
+            width: 22px; height: 22px; border-radius: 50%;
+            background: var(--primary); display: flex; align-items: center; justify-content: center;
+            font-size: 11px; opacity: 0; transform: scale(0.5);
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .paper-card.active .check { opacity: 1; transform: scale(1); }
+
+        /* ─── DATE PICKER ─── */
+        .date-row {
+            width: 100%; max-width: 580px;
+            display: flex; align-items: center; gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .date-label {
+            font-size: 14px; color: var(--muted-light); font-weight: 500; white-space: nowrap;
+        }
+
+        .date-input {
+            flex: 1; padding: 12px 16px;
+            background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px; color: var(--text); font-family: inherit; font-size: 15px;
+            outline: none; transition: border-color 0.2s;
+        }
+
+        .date-input:focus { border-color: var(--primary); }
+        ::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+
+        /* ─── FETCH BUTTON ─── */
+        .fetch-btn {
+            width: 100%; max-width: 580px;
+            padding: 18px 30px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);
+            border: none; border-radius: 16px;
+            color: white; font-family: inherit; font-size: 17px; font-weight: 700;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 12px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 10px 40px rgba(99,102,241,0.35);
+            position: relative; overflow: hidden;
+            animation: pulseBtn 3s ease-in-out infinite;
+        }
+
+        @keyframes pulseBtn {
+            0%, 100% { box-shadow: 0 10px 40px rgba(99,102,241,0.35); }
+            50% { box-shadow: 0 10px 60px rgba(99,102,241,0.55); }
+        }
+
+        .fetch-btn:hover { transform: translateY(-2px) scale(1.01); box-shadow: 0 16px 50px rgba(99,102,241,0.5); }
+        .fetch-btn:active { transform: translateY(0); }
+        .fetch-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; animation: none; }
+
+        .fetch-btn .shimmer {
+            position: absolute; inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            transform: translateX(-100%);
+            animation: shimmerSlide 3s ease-in-out infinite;
+        }
+
+        @keyframes shimmerSlide {
+            0% { transform: translateX(-100%); }
+            50%, 100% { transform: translateX(100%); }
+        }
+
+        /* ─── LOADER ─── */
+        .loader-box {
+            width: 100%; max-width: 580px;
+            background: var(--glass); border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 16px; padding: 36px;
+            text-align: center; display: none;
+            animation: fadeUp 0.3s ease;
+        }
+
+        .spinner-ring {
+            display: inline-block; width: 48px; height: 48px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: var(--primary);
+            border-radius: 50%; animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loader-text { color: var(--muted-light); font-size: 14px; line-height: 1.6; }
+        .loader-progress { margin-top: 14px; background: rgba(255,255,255,0.05); border-radius: 999px; height: 4px; overflow: hidden; }
+        .loader-progress-bar { height: 100%; background: linear-gradient(90deg, var(--primary), var(--purple)); border-radius: 999px; animation: progressAnim 2s ease-in-out infinite; }
+
+        @keyframes progressAnim {
+            0% { width: 15%; margin-left: 0; }
+            50% { width: 70%; margin-left: 15%; }
+            100% { width: 15%; margin-left: 85%; }
+        }
+
+        /* ─── RESULT CARD ─── */
+        .result-card {
+            width: 100%; max-width: 580px; display: none;
+            animation: fadeUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        .result-header {
+            background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2);
+            border-radius: 16px 16px 0 0; padding: 18px 22px;
+            display: flex; align-items: center; gap: 14px;
+        }
+
+        .result-icon {
+            width: 44px; height: 44px; border-radius: 12px;
+            background: rgba(16,185,129,0.15); display: flex; align-items: center; justify-content: center;
+            font-size: 20px; flex-shrink: 0;
+        }
+
+        .result-header-text .found { font-size: 12px; font-weight: 600; color: var(--green); text-transform: uppercase; letter-spacing: 0.06em; }
+        .result-header-text .paper-and-date { font-size: 15px; font-weight: 700; color: var(--text); margin-top: 2px; }
+
+        .result-actions {
+            background: rgba(15,23,42,0.5); border: 1px solid rgba(255,255,255,0.07);
+            border-top: none; border-radius: 0 0 16px 16px; padding: 20px;
+            display: flex; flex-direction: column; gap: 12px;
+        }
+
+        .action-btn {
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            padding: 15px 20px; border-radius: 12px; font-family: inherit; font-size: 15px;
+            font-weight: 600; cursor: pointer; border: none; text-decoration: none;
+            transition: all 0.25s ease;
+        }
+
+        .action-btn-reader {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white; box-shadow: 0 4px 20px rgba(16,185,129,0.3);
+        }
+        .action-btn-reader:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(16,185,129,0.45); }
+
+        .action-btn-ai {
+            background: linear-gradient(135deg, rgba(168,85,247,0.15) 0%, rgba(99,102,241,0.15) 100%);
+            border: 1px solid rgba(168,85,247,0.35); color: #c4b5fd;
+            position: relative; overflow: hidden;
+        }
+        .action-btn-ai:hover { background: linear-gradient(135deg, rgba(168,85,247,0.25) 0%, rgba(99,102,241,0.25) 100%); transform: translateY(-2px); }
+
+        .action-btn-ai .ai-glow {
+            position: absolute; inset: 0;
+            background: radial-gradient(ellipse at center, rgba(168,85,247,0.2), transparent 70%);
+            animation: aiGlow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes aiGlow { 0% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        .action-btn-share {
+            background: var(--glass); border: 1px solid rgba(255,255,255,0.1); color: var(--muted-light);
+        }
+        .action-btn-share:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+
+        /* ─── ERROR BOX ─── */
+        .error-box {
+            width: 100%; max-width: 580px; display: none;
+            background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
+            border-radius: 16px; padding: 20px 22px;
+            display: none; align-items: flex-start; gap: 14px;
+            animation: fadeUp 0.3s ease;
+        }
+
+        .error-box.visible { display: flex; }
+
+        .error-icon { font-size: 22px; flex-shrink: 0; margin-top: 2px; }
+        .error-text { font-size: 14px; color: #fca5a5; line-height: 1.6; }
+
+        /* ─── AI SUMMARY OVERLAY ─── */
+        .ai-overlay {
+            position: fixed; inset: 0; z-index: 500;
+            background: var(--bg); display: none; flex-direction: column;
+            animation: slideUpOverlay 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .ai-overlay.open { display: flex; }
+
+        @keyframes slideUpOverlay {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .ai-topbar {
+            padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,0.07);
+            background: rgba(10,15,30,0.95); backdrop-filter: blur(20px);
+            display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+        }
+
+        .ai-topbar-left { display: flex; align-items: center; gap: 12px; }
+        .ai-badge {
+            background: linear-gradient(135deg, rgba(168,85,247,0.2), rgba(99,102,241,0.2));
+            border: 1px solid rgba(168,85,247,0.3); border-radius: 8px;
+            padding: 6px 12px; font-size: 13px; font-weight: 700; color: #c4b5fd;
+            display: flex; align-items: center; gap: 6px;
+        }
+
+        .ai-topbar-title { font-size: 15px; font-weight: 600; color: var(--text); }
+        .ai-edition { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+        .close-ai-btn {
+            padding: 10px 18px; background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+            color: var(--text); font-family: inherit; font-size: 14px;
+            cursor: pointer; display: flex; align-items: center; gap: 7px; transition: all 0.2s;
+        }
+
+        .close-ai-btn:hover { background: rgba(255,255,255,0.12); }
+
+        .ai-content { flex: 1; overflow-y: auto; padding: 32px 24px; max-width: 860px; margin: 0 auto; width: 100%; }
+
+        /* AI Loading State */
+        .ai-loading { text-align: center; padding: 80px 20px; }
+        .ai-loading .brain { font-size: 56px; animation: brainPulse 1.5s ease-in-out infinite alternate; }
+        @keyframes brainPulse { 0% { transform: scale(0.95); filter: brightness(0.8); } 100% { transform: scale(1.05); filter: brightness(1.2); } }
+        .ai-loading h3 { font-size: 22px; font-weight: 700; margin: 20px 0 8px; }
+        .ai-loading p { color: var(--muted-light); font-size: 15px; line-height: 1.6; }
+        .ai-steps { margin-top: 30px; list-style: none; display: flex; flex-direction: column; gap: 8px; text-align: left; max-width: 360px; margin-left: auto; margin-right: auto; }
+        .ai-step { padding: 10px 14px; background: var(--glass); border-radius: 10px; font-size: 13px; color: var(--muted-light); display: flex; align-items: center; gap: 8px; }
+        .ai-step.done { color: var(--green); }
+        .ai-step.active { color: var(--primary-light); background: rgba(99,102,241,0.08); }
+
+        /* Rendered Markdown */
+        .ai-rendered h1, .ai-rendered h2 {
+            font-family: 'Playfair Display', serif;
+            color: var(--text); margin: 32px 0 12px;
+            padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .ai-rendered h2 { font-size: 22px; }
+        .ai-rendered h3 { font-size: 18px; color: #a5b4fc; margin: 24px 0 10px; font-family: 'Inter', sans-serif; font-weight: 700; }
+        .ai-rendered p { color: #cbd5e1; line-height: 1.75; margin-bottom: 14px; font-size: 15px; }
+        .ai-rendered ul, .ai-rendered ol { margin: 0 0 14px 22px; color: #94a3b8; }
+        .ai-rendered li { margin-bottom: 8px; line-height: 1.65; font-size: 15px; }
+        .ai-rendered strong { color: #e2e8f0; font-weight: 600; }
+        .ai-rendered hr { border: none; border-top: 1px solid rgba(255,255,255,0.07); margin: 28px 0; }
+        .ai-rendered blockquote { border-left: 3px solid var(--primary); padding: 12px 18px; background: rgba(99,102,241,0.07); border-radius: 0 10px 10px 0; margin: 18px 0; }
+        .ai-rendered blockquote p { color: #a5b4fc; margin: 0; }
+
+        /* Utilities */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg-grid"></div>
+    <div class="bg-glow glow-1"></div>
+    <div class="bg-glow glow-2"></div>
+    <div class="bg-glow glow-3"></div>
+
+    <!-- MAIN APP -->
+    <div class="app-wrapper" id="mainApp">
+
+        <!-- Hero -->
+        <div class="hero">
+            <div class="logo-chip"><i class="fa-solid fa-newspaper"></i> E-Paper Hub</div>
+            <h1>Your Daily Newspaper,<br>Reimagined.</h1>
+            <p>Instant access to today's editions with AI-powered summaries for when you're short on time.</p>
+        </div>
+
+        <!-- Paper Selector -->
+        <div class="paper-grid">
+            <div class="paper-card active" id="card-ei-samay" onclick="selectPaper('ei-samay')">
+                <span class="emoji">📰</span>
+                <span class="name">Ei Samay</span>
+                <span class="lang">Bengali</span>
+                <span class="check"><i class="fa-solid fa-check"></i></span>
+            </div>
+            <div class="paper-card" id="card-economic-times" onclick="selectPaper('economic-times')">
+                <span class="emoji">💹</span>
+                <span class="name">Economic Times</span>
+                <span class="lang">English</span>
+                <span class="check"><i class="fa-solid fa-check"></i></span>
+            </div>
+        </div>
+
+        <!-- Date Picker -->
+        <div class="date-row">
+            <span class="date-label"><i class="fa-regular fa-calendar" style="margin-right:6px;"></i>Edition date</span>
+            <input type="date" id="dateInput" class="date-input">
+        </div>
+
+        <!-- Fetch Button -->
+        <button class="fetch-btn" id="fetchBtn" onclick="doFetch()">
+            <div class="shimmer"></div>
+            <i class="fa-solid fa-bolt"></i>
+            <span id="fetchBtnText">Fetch E-Paper</span>
+        </button>
+
+        <!-- Loader -->
+        <div class="loader-box" id="loaderBox" style="margin-top:24px;">
+            <div class="spinner-ring"></div>
+            <div class="loader-text">Scanning <strong id="scanSource">news archives</strong> simultaneously...<br><span style="font-size:12px; color:var(--muted);">Using multi-source redundancy for guaranteed results</span></div>
+            <div class="loader-progress" style="margin-top:18px;"><div class="loader-progress-bar"></div></div>
+        </div>
+
+        <!-- Result -->
+        <div class="result-card" id="resultCard" style="margin-top:24px;">
+            <div class="result-header">
+                <div class="result-icon">✅</div>
+                <div class="result-header-text">
+                    <div class="found">Edition Found</div>
+                    <div class="paper-and-date" id="resultLabel">Loading...</div>
+                </div>
+            </div>
+            <div class="result-actions">
+                <a id="readerBtn" href="#" target="_blank" rel="noopener noreferrer" class="action-btn action-btn-reader">
+                    <i class="fa-solid fa-book-open-reader"></i>
+                    <span>Open Deep Reader View</span>
+                    <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:13px; opacity:0.7;"></i>
+                </a>
+                <button class="action-btn action-btn-share" onclick="doShare()">
+                    <i class="fa-solid fa-share-nodes"></i> Share Link
+                </button>
+            </div>
+        </div>
+
+        <!-- Error -->
+        <div class="error-box" id="errorBox" style="margin-top:24px;">
+            <div class="error-icon">⚠️</div>
+            <div class="error-text" id="errorText">An error occurred.</div>
+        </div>
+
+    </div>
+
+    <!-- AI SUMMARY OVERLAY -->
+    <div class="ai-overlay" id="aiOverlay">
+        <div class="ai-topbar">
+            <div class="ai-topbar-left">
+                <div class="ai-badge"><i class="fa-solid fa-wand-magic-sparkles"></i> Gemini AI</div>
+                <div>
+                    <div class="ai-topbar-title">AI Edition Summary</div>
+                    <div class="ai-edition" id="aiEditionLabel">Powered by Google Gemini 2.5 Flash</div>
+                </div>
+            </div>
+            <button class="close-ai-btn" onclick="closeAI()">
+                <i class="fa-solid fa-xmark"></i> Close
+            </button>
+        </div>
+        <div class="ai-content" id="aiContentBox">
+            <!-- Loading or Rendered Content Goes Here -->
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

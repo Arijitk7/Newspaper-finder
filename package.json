@@ -1,0 +1,17 @@
+{
+  "name": "epaper-hub",
+  "version": "1.0.0",
+  "description": "E-Paper Hub — Ei Samay & Economic Times daily newspaper fetcher",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "node backend/server.js",
+    "install:backend": "cd backend && npm install"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["newspaper", "epaper", "ei-samay", "economic-times"],
+  "author": "",
+  "license": "ISC"
+}
